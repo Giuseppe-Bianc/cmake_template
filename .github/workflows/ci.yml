@@ -10,9 +10,8 @@ on:
       - develop
 
 env:
-  CLANG_TIDY_VERSION: "19.1.1"
+  CLANG_TIDY_VERSION: "21.1.8"
   VERBOSE: 1
-
 
 jobs:
   Test:
@@ -35,8 +34,8 @@ jobs:
           - windows-latest
         compiler:
           # you can specify the version after `-` like "llvm-15.0.2".
-          - llvm-19.1.1
-          - gcc-14
+          - llvm-21.1.8
+          - gcc-15
         generator:
           - "Ninja Multi-Config"
         build_type:
@@ -51,21 +50,23 @@ jobs:
         exclude:
           # mingw is determined by this author to be too buggy to support
           - os: windows-latest
-            compiler: gcc-14
+            compiler: gcc-15
+          # - os: windows-latest
+          #  compiler: llvm-19.1.1
 
         include:
           # Add appropriate variables for gcov version required. This will intentionally break
           # if you try to use a compiler that does not have gcov set
-          - compiler: gcc-14
-            gcov_executable: gcov-14
+          - compiler: gcc-15
+            gcov_executable: gcov-15
             enable_ipo: On
 
-          - compiler: llvm-19.1.1
+          - compiler: llvm-21.1.8
             enable_ipo: Off
             gcov_executable: "llvm-cov gcov"
 
-          - os: macos-latest
-            enable_ipo: Off
+          # - os: macos-latest
+          #   enable_ipo: Off
 
           # Set up preferred package generators, for given build configurations
           - build_type: Release
@@ -74,51 +75,54 @@ jobs:
 
           # This exists solely to make sure a non-multiconfig build works
           - os: ubuntu-latest
-            compiler: gcc-14
+            compiler: gcc-15
             generator: "Unix Makefiles"
             build_type: Debug
-            gcov_executable: gcov-14
+            gcov_executable: gcov-15
             packaging_maintainer_mode: On
             enable_ipo: Off
 
           # Windows msvc builds
           - os: windows-latest
             compiler: msvc
-            generator: "Visual Studio 17 2022"
+            generator: "Visual Studio 18 2026"
             build_type: Debug
             packaging_maintainer_mode: On
             enable_ipo: On
 
           - os: windows-latest
             compiler: msvc
-            generator: "Visual Studio 17 2022"
+            generator: "Visual Studio 18 2026"
             build_type: Release
             packaging_maintainer_mode: On
             enable_ipo: On
 
           - os: windows-latest
             compiler: msvc
-            generator: "Visual Studio 17 2022"
+            generator: "Visual Studio 18 2026"
             build_type: Debug
             packaging_maintainer_mode: Off
 
           - os: windows-latest
             compiler: msvc
-            generator: "Visual Studio 17 2022"
+            generator: "Visual Studio 18 2026"
             build_type: Release
             packaging_maintainer_mode: Off
             package_generator: ZIP
 
           - os: windows-latest
             compiler: msvc
-            generator: "Visual Studio 17 2022"
+            generator: "Visual Studio 18 2026"
             build_type: Release
             packaging_maintainer_mode: On
             enable_ipo: On
             build_shared: On
 
-
     steps:
+      - name: Get number of CPU cores
+        uses: SimenB/github-actions-cpu-cores@v3
+        id: cpu-cores
+
       - name: Check for llvm version mismatches
         if: ${{ contains(matrix.compiler, 'llvm') && !contains(matrix.compiler, env.CLANG_TIDY_VERSION) }}
         uses: actions/github-script@v9
@@ -127,6 +131,9 @@ jobs:
             core.setFailed('There is a mismatch between configured llvm compiler and clang-tidy version chosen')
 
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
 
       - name: Setup Cache
         uses: ./.github/actions/setup_cache
@@ -141,8 +148,7 @@ jobs:
         with:
           envFile: '.github/constants.env'
 
-
-      - name: Setup Cpp
+      - name: Setup C++ Toolchain
         uses: aminya/setup-cpp@v1
         with:
           compiler: ${{ matrix.compiler }}
@@ -160,6 +166,14 @@ jobs:
           gcovr: true
           opencppcoverage: true
 
+      - name: Update Gcov with pipx
+        run: |
+          pip install --upgrade gcovr --break-system-packages
+          gcovr --version  # Verify gcovr is installed correctly
+
+      - name: Update CMake to latest version
+        uses: ./.github/actions/setup_cmake
+
       - name: Configure CMake
         run: |
           cmake -S . -B ./build -G "${{matrix.generator}}" -D${{ env.PROJECT_NAME }}_ENABLE_IPO=${{matrix.enable_ipo }} -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -D${{ env.PROJECT_NAME }}_PACKAGING_MAINTAINER_MODE:BOOL=${{matrix.packaging_maintainer_mode}} -D${{ env.PROJECT_NAME }}_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }} -DGIT_SHA:STRING=${{ github.sha }}
@@ -167,22 +181,29 @@ jobs:
       - name: Build
         # Execute the build.  You can specify a specific target with "--target <NAME>"
         run: |
-          cmake --build ./build --config ${{matrix.build_type}}
+          cmake --build ./build --config ${{matrix.build_type}} --parallel ${{ steps.cpu-cores.outputs.count }}
 
-      - name: Unix - Test and coverage
+      - name: Unix - Test
         if: runner.os != 'Windows'
         working-directory: ./build
-        # Execute tests defined by the CMake configuration.
-        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+        run: ctest -C ${{matrix.build_type}} -j ${{ steps.cpu-cores.outputs.count }} --rerun-failed --output-on-failure --no-compress-output
+
+      - name: Unix - Coverage
+        if: runner.os != 'Windows' && matrix.build_type == 'Debug'
+        working-directory: ./build
         run: |
-          ctest -C ${{matrix.build_type}}
-          gcovr -j ${{env.nproc}} --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
+          gcovr -j ${{ steps.cpu-cores.outputs.count }} --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
+
+      - name: Windows - Verify OpenCppCoverage
+        if: runner.os == 'Windows'
+        run: |
+          where OpenCppCoverage.exe
 
       - name: Windows - Test and coverage
         if: runner.os == 'Windows'
         working-directory: ./build
         run: |
-          OpenCppCoverage.exe --export_type cobertura:coverage.xml --cover_children -- ctest -C ${{matrix.build_type}}
+          OpenCppCoverage.exe --sources "${{ github.workspace }}\include" --sources "${{ github.workspace }}\src" --modules "${{ github.workspace }}\build" --excluded_sources ".*\\_deps\\.*" --excluded_sources ".*\\vcpkg_installed\\.*" --excluded_sources ".*\\configured_files\\.*" --excluded_sources ".*\\.cmake\\.*" --export_type cobertura:coverage.xml --cover_children -- ctest -C ${{ matrix.build_type }} -j ${{ steps.cpu-cores.outputs.count }} --output-on-failure --no-compress-output
 
       - name: CPack
         if: matrix.package_generator != ''
@@ -197,12 +218,13 @@ jobs:
           files: |
             build/*-*${{ matrix.build_type }}*-*.*
 
-
-      - name: Publish to codecov
-        uses: codecov/codecov-action@v5
+      # out/cobertura.xml
+      - name: Upload coverage to Codecov
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.build_type == 'release') }}
+        uses: codecov/codecov-action@v7
         with:
           fail_ci_if_error: true # we weren't posting previously
-          flags: ${{ runner.os }}
-          name: ${{ runner.os }}-coverage
+          flags: ${{ matrix.os }}-${{ matrix.build_type }}
+          name: ${{ matrix.os }}-${{ matrix.build_type }}-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./build/coverage.xml
