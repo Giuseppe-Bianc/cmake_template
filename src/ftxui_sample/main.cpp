@@ -308,6 +308,7 @@ namespace {
         std::thread refresh_ui([&] {
             while(refresh_ui_continue) {
                 using namespace std::chrono_literals;
+                //NOLINTNEXTLINE(*-avoid-magic-numbers,*-magic-numbers)
                 std::this_thread::sleep_for(1.0s / target_fps);
                 screen.PostEvent(ftxui::Event::Custom);
             }
