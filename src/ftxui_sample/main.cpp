@@ -1,3 +1,4 @@
+// NOLINTBEGIN(*-include-cleaner, *-const-correctness, *-identifier-length)
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -12,6 +13,7 @@
 #include <ftxui/screen/screen.hpp>
 #include <functional>
 #include <optional>
+#include <variant>
 
 #include <random>
 
@@ -62,9 +64,12 @@ template <std::size_t Width, std::size_t Height> struct GameBoard {
 
     [[nodiscard]] bool &get(std::size_t cur_x, std::size_t cur_y) { return values.at(cur_x).at(cur_y); }
 
+    // Non-trivial: seeds every cell to ON so the board starts fully lit; `= default` would skip this loop.
+    // NOLINTBEGIN(hicpp-use-equals-default, modernize-use-equals-default)
     GameBoard() {
         visit([](const auto cur_x, const auto cur_y, auto &gameboard) { gameboard.set(cur_x, cur_y, true); });
     }
+    // NOLINTEND(hicpp-use-equals-default, modernize-use-equals-default)
 
     void update_strings() {
         for(std::size_t cur_x = 0; cur_x < width; ++cur_x) {
@@ -144,14 +149,18 @@ namespace {
         };
 
         static constexpr int randomization_iterations = 100;
-        static constexpr int random_seed = 42;
+        static constexpr std::uint32_t random_seed = 42;
 
-        std::mt19937 gen32{random_seed};  // NOLINT fixed seed
+        // Fixed seed is intentional: ensures reproducible board randomization on every run.
+        // NOLINTBEGIN(*-msc32-c,*-msc51-cpp, *-random-generator-seed)
+        std::mt19937 gen32{random_seed};
+        // NOLINTEND(*-msc32-c,*-msc51-cpp, *-random-generator-seed)
 
-        // NOLINTNEXTLINE This cannot be const
+        // std::uniform_int_distribution::operator() is non-const; these cannot be declared const.
+        // NOLINTBEGIN(misc-const-correctness)
         std::uniform_int_distribution<std::size_t> cur_x(static_cast<std::size_t>(0), game_board.width - 1);
-        // NOLINTNEXTLINE This cannot be const
         std::uniform_int_distribution<std::size_t> cur_y(static_cast<std::size_t>(0), game_board.height - 1);
+        // NOLINTEND(misc-const-correctness)
 
         for(int i = 0; i < randomization_iterations; ++i) { game_board.press(cur_x(gen32), cur_y(gen32)); }
         game_board.move_count = 0;
@@ -175,8 +184,11 @@ struct Color {
 
 // A simple way of representing a bitmap on screen using only characters
 struct Bitmap : ftxui::Node {
-    Bitmap(std::size_t width, std::size_t height)  // NOLINT same typed parameters adjacent to each other
+    // Width and height are both std::size_t by necessity; no meaningful type distinction is possible.
+    // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+    Bitmap(std::size_t width, std::size_t height)
       : width_(width), height_(height) {}
+    // NOLINTEND(bugprone-easily-swappable-parameters)
 
     Color &at(std::size_t cur_x, std::size_t cur_y) { return pixels.at((width_ * cur_y) + cur_x); }
 
@@ -213,10 +225,15 @@ private:
 
 namespace {
     void game_iteration_canvas() {
-        // this should probably have a `bitmap` helper function that does what cur_you expect
-        // similar to the other parts of FTXUI
-        auto bm = std::make_shared<Bitmap>(50, 50);      // NOLINT magic numbers
-        auto small_bm = std::make_shared<Bitmap>(6, 6);  // NOLINT magic numbers
+        static constexpr std::size_t large_bitmap_size = 50;
+        static constexpr std::size_t small_bitmap_size = 6;
+        static constexpr double microseconds_per_second = 1'000'000.0;
+        static constexpr double target_fps = 30.0;
+        static constexpr std::uint8_t color_increment = 11;
+
+        // to do, add total game time clock also, not just current elapsed time
+        auto bm = std::make_shared<Bitmap>(large_bitmap_size, large_bitmap_size);
+        auto small_bm = std::make_shared<Bitmap>(small_bitmap_size, small_bitmap_size);
 
         double fps = 0;
 
@@ -230,7 +247,7 @@ namespace {
 
             // this isn't actually timing based for now, it's just updating the display however fast it can
             fps = 1.0 / (static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time).count()) /
-                         1'000'000.0);  // NOLINT magic numbers
+                         microseconds_per_second);
 
             for(std::size_t row = 0; row < max_row; ++row) {
                 for(std::size_t col = 0; col < bm->width(); ++col) { ++(bm->at(col, row).R); }
@@ -245,13 +262,13 @@ namespace {
 
             switch(elapsed_time.count() % 3) {
             case 0:
-                small_bm_pixel.R += 11;  // NOLINT Magic Number
+                small_bm_pixel.R += color_increment;
                 break;
             case 1:
-                small_bm_pixel.G += 11;  // NOLINT Magic Number
+                small_bm_pixel.G += color_increment;
                 break;
             case 2:
-                small_bm_pixel.B += 11;  // NOLINT Magic Number
+                small_bm_pixel.B += color_increment;
                 break;
             default:  // literally impossible
                 std::unreachable();
@@ -292,7 +309,7 @@ namespace {
         std::thread refresh_ui([&] {
             while(refresh_ui_continue) {
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1.0s / 30.0);  // NOLINT magic numbers
+                std::this_thread::sleep_for(1.0s / target_fps);
                 screen.PostEvent(ftxui::Event::Custom);
             }
         });
@@ -336,5 +353,11 @@ int main(int argc, const char **argv) {
             game_iteration_canvas();
         }
 
-    } catch(const std::exception &e) { spdlog::error("Unhandled exception in main: {}", e.what()); }
+    } catch(const std::exception &e) {
+        spdlog::error("Unhandled exception in main: {}", e.what());
+    } catch(...) {
+        spdlog::error("Unknown unhandled exception in main");
+    }
 }
+
+// NOLINTEND(*-include-cleaner, *-const-correctness, *-identifier-length)
