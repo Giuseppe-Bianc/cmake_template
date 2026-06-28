@@ -10,7 +10,7 @@ function(
         CLANG_WARNINGS
         GCC_WARNINGS
         CUDA_WARNINGS)
-    if ("${MSVC_WARNINGS}" STREQUAL "")
+    if (NOT MSVC_WARNINGS)
         set(MSVC_WARNINGS
                 /W4 # Baseline reasonable warnings
                 /w14242 # 'identifier': conversion from 'type1' to 'type2', possible loss of data
@@ -34,11 +34,15 @@ function(
                 /w14905 # wide string literal cast to 'LPSTR'
                 /w14906 # string literal cast to 'LPWSTR'
                 /w14928 # illegal copy-initialization; more than one user-defined conversion has been implicitly applied
+                /wd4996 # Compatibility with C++98
+                /wd4464 # relative include path contains '..'
+                /wd4514 # unreferenced inline function has been removed
+                /wd4702
                 /permissive- # standards conformance mode for MSVC compiler.
         )
     endif ()
 
-    if ("${CLANG_WARNINGS}" STREQUAL "")
+    if (NOT CLANG_WARNINGS)
         set(CLANG_WARNINGS
                 -Wall
                 -Wextra # reasonable and standard
@@ -58,7 +62,7 @@ function(
         )
     endif ()
 
-    if ("${GCC_WARNINGS}" STREQUAL "")
+    if (NOT GCC_WARNINGS)
         set(GCC_WARNINGS
                 ${CLANG_WARNINGS}
                 -Wmisleading-indentation # warn if indentation implies blocks where blocks do not exist
@@ -66,11 +70,12 @@ function(
                 -Wduplicated-branches # warn if if / else branches have duplicated code
                 -Wlogical-op # warn about logical operations being used where bitwise were probably wanted
                 -Wuseless-cast # warn if you perform a cast to the same type
+                -Wstringop-overread
                 -Wsuggest-override # warn if an overridden member function is not marked 'override' or 'final'
         )
     endif ()
 
-    if ("${CUDA_WARNINGS}" STREQUAL "")
+    if (NOT CUDA_WARNINGS)
         set(CUDA_WARNINGS
                 -Wall
                 -Wextra
@@ -82,24 +87,26 @@ function(
     endif ()
 
     if (WARNINGS_AS_ERRORS)
-        message(TRACE "Warnings are treated as errors")
+        message(TRACE "Treating warnings as errors")
         list(APPEND CLANG_WARNINGS -Werror)
         list(APPEND GCC_WARNINGS -Werror)
         list(APPEND MSVC_WARNINGS /WX)
+        list(APPEND CUDA_WARNINGS -Werror)
     endif ()
 
     if (MSVC)
-        set(PROJECT_WARNINGS_CXX ${MSVC_WARNINGS})
+        set(PROJECT_WARNINGS_CXX "${MSVC_WARNINGS}")
+        #set(PROJECT_LINK_OPTIONS "/DEBUG")
     elseif (CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
-        set(PROJECT_WARNINGS_CXX ${CLANG_WARNINGS})
+        set(PROJECT_WARNINGS_CXX "${CLANG_WARNINGS}")
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(PROJECT_WARNINGS_CXX ${GCC_WARNINGS})
+        set(PROJECT_WARNINGS_CXX "${GCC_WARNINGS}")
     else ()
         message(AUTHOR_WARNING "No compiler warnings set for CXX compiler: '${CMAKE_CXX_COMPILER_ID}'")
         # TODO support Intel compiler
     endif ()
 
-    # use the same warning flags for C
+    # Set the same warnings flags for C and CUDA
     set(PROJECT_WARNINGS_C "${PROJECT_WARNINGS_CXX}")
 
     set(PROJECT_WARNINGS_CUDA "${CUDA_WARNINGS}")
@@ -112,4 +119,7 @@ function(
             $<$<COMPILE_LANGUAGE:C>:${PROJECT_WARNINGS_C}>
             # Cuda warnings
             $<$<COMPILE_LANGUAGE:CUDA>:${PROJECT_WARNINGS_CUDA}>)
+    if (MSVC)
+        target_link_options(${project_name} INTERFACE ${PROJECT_LINK_OPTIONS})
+    endif ()
 endfunction()
