@@ -186,8 +186,7 @@ struct Color {
 struct Bitmap : ftxui::Node {
     // Width and height are both std::size_t by necessity; no meaningful type distinction is possible.
     // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-    Bitmap(std::size_t width, std::size_t height)
-      : width_(width), height_(height) {}
+    Bitmap(std::size_t width, std::size_t height) : width_(width), height_(height) {}
     // NOLINTEND(bugprone-easily-swappable-parameters)
 
     Color &at(std::size_t cur_x, std::size_t cur_y) { return pixels.at((width_ * cur_y) + cur_x); }
@@ -353,9 +352,7 @@ int main(int argc, const char **argv) {
             game_iteration_canvas();
         }
 
-    } catch(const std::exception &e) {
-        spdlog::error("Unhandled exception in main: {}", e.what());
-    } catch(...) {
+    } catch(const std::exception &e) { spdlog::error("Unhandled exception in main: {}", e.what()); } catch(...) {
         spdlog::error("Unknown unhandled exception in main");
     }
 }
