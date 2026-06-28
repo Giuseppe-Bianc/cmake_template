@@ -6,7 +6,8 @@ macro(
         global
         ubsan_minimal_runtime)
 
-    message(STATUS "** Enabling Hardening (Target ${target}) **")
+    message(STATUS "Configuring security hardening for target: ${target}")
+    message(STATUS "-----------------------------------------")
 
     if (MSVC)
         list(APPEND NEW_COMPILE_OPTIONS /sdl /DYNAMICBASE /guard:cf)
@@ -37,7 +38,7 @@ macro(
             list(APPEND NEW_COMPILE_OPTIONS -fstack-protector-strong)
             message(STATUS "*** g++/clang -fstack-protector-strong enabled")
         else ()
-            message(STATUS "*** g++/clang -fstack-protector-strong NOT enabled (not supported)")
+            message(STATUS "Stack protector not available (not supported)")
         endif ()
 
         check_cxx_compiler_flag(-fcf-protection CF_PROTECTION)
@@ -45,7 +46,7 @@ macro(
             list(APPEND NEW_COMPILE_OPTIONS -fcf-protection)
             message(STATUS "*** g++/clang -fcf-protection enabled")
         else ()
-            message(STATUS "*** g++/clang -fcf-protection NOT enabled (not supported)")
+            message(STATUS "CFI not available (not supported)")
         endif ()
 
         check_cxx_compiler_flag(-fstack-clash-protection CLASH_PROTECTION)
@@ -54,16 +55,17 @@ macro(
                 list(APPEND NEW_COMPILE_OPTIONS -fstack-clash-protection)
                 message(STATUS "*** g++/clang -fstack-clash-protection enabled")
             else ()
-                message(STATUS "*** g++/clang -fstack-clash-protection NOT enabled (clang on non-Linux)")
+                message(STATUS "Stack clash protection requires Linux/GNU toolchain")
             endif ()
         else ()
-            message(STATUS "*** g++/clang -fstack-clash-protection NOT enabled (not supported)")
+            message(STATUS "Stack clash protection unavailable (not supported)")
         endif ()
     endif ()
 
-    if (${ubsan_minimal_runtime})
-        check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover=undefined -fsanitize-minimal-runtime"
-                MINIMAL_RUNTIME)
+    # Undefined behavior sanitizer configuration
+    if (ubsan_minimal_runtime)
+        message(STATUS "Undefined Behavior Sanitizer Configuration:")
+        check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover=undefined -fsanitize-minimal-runtime" MINIMAL_RUNTIME)
         if (MINIMAL_RUNTIME)
             list(APPEND NEW_COMPILE_OPTIONS -fsanitize=undefined -fsanitize-minimal-runtime)
             list(APPEND NEW_LINK_OPTIONS -fsanitize=undefined -fsanitize-minimal-runtime)
@@ -72,20 +74,22 @@ macro(
                 list(APPEND NEW_COMPILE_OPTIONS -fno-sanitize-recover=undefined)
                 list(APPEND NEW_LINK_OPTIONS -fno-sanitize-recover=undefined)
             else ()
-                message(STATUS "** not enabling -fno-sanitize-recover=undefined for global consumption")
+                message(STATUS " Using recoverable UB checks for global compatibility")
             endif ()
 
-            message(STATUS "*** ubsan minimal runtime enabled")
+            message(STATUS "  [CXX] -fsanitize-minimal-runtime - Production-safe sanitizer:")
+            message(STATUS "           * ~50% less overhead than full sanitizer")
+            message(STATUS "           * Requires clang 7+/gcc 10+")
         else ()
-            message(STATUS "*** ubsan minimal runtime NOT enabled (not supported)")
+            message(STATUS " UBSan minimal runtime unavailable - needs modern toolchain")
         endif ()
-    else ()
-        message(STATUS "*** ubsan minimal runtime NOT enabled (not requested)")
     endif ()
 
-    message(STATUS "** Hardening Compiler Flags: ${NEW_COMPILE_OPTIONS}")
-    message(STATUS "** Hardening Linker Flags: ${NEW_LINK_OPTIONS}")
-    message(STATUS "** Hardening Compiler Defines: ${NEW_CXX_DEFINITIONS}")
+    # Apply hardening configuration
+    message(STATUS "Final Hardening Flags:")
+    message(STATUS "  Compiler Options: ${NEW_COMPILE_OPTIONS}")
+    message(STATUS "  Linker Options:   ${NEW_LINK_OPTIONS}")
+    message(STATUS "  Definitions:      ${NEW_CXX_DEFINITIONS}")
 
     if (${global})
         message(STATUS "** Setting hardening options globally for all dependencies")
@@ -93,8 +97,11 @@ macro(
         add_compile_definitions(${NEW_CXX_DEFINITIONS})
         add_link_options(${NEW_LINK_OPTIONS})
     else ()
+        message(STATUS "Applying hardening to TARGET: ${target}")
         target_compile_options(${target} INTERFACE ${NEW_COMPILE_OPTIONS})
         target_link_options(${target} INTERFACE ${NEW_LINK_OPTIONS})
         target_compile_definitions(${target} INTERFACE ${NEW_CXX_DEFINITIONS})
     endif ()
+    message(STATUS "Hardening configuration complete")
+    message(STATUS "-----------------------------------------")
 endmacro()
