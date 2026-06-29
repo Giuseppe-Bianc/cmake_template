@@ -11,6 +11,7 @@ cmake_policy(SET CMP0155 OLD)
 if (NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 endif ()
 
 # strongly encouraged to enable this globally to avoid conflicts between
