@@ -23,8 +23,9 @@ on:
 
 jobs:
   analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
+    name: Analyze ${{matrix.os}} ${{matrix.compiler}} ${{matrix.build_type}} ${{matrix.packaging_maintainer_mode == 'ON' && '(maintainer mode)' || ''}}
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
     permissions:
       actions: read
       contents: read
@@ -33,22 +34,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp' ]
-        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
-        # Learn more about CodeQL language support at https://git.io/codeql-language-support
-        compiler:
-          # you can specify the version after `-` like "llvm-13.0.0".
-          - gcc-15
-        generator:
-          - "Ninja Multi-Config"
-        build_type:
-          - Debug
-        packaging_maintainer_mode:
-          - ON
+        include:
+          - language: c-cpp
+            # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
+            # Learn more about CodeQL language support at https://git.io/codeql-language-support
+            compiler: gcc-15
+            generator: "Ninja Multi-Config"
+            build_type: Debug
+            packaging_maintainer_mode: ON
+            build-mode: manual
 
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 1
 
     - name: Setup Cache
       uses: ./.github/actions/setup_cache
@@ -59,7 +59,7 @@ jobs:
         generator: ${{ matrix.generator }}
 
     - name: Project Name
-      uses: cardinalby/export-env-action@v2
+      uses: cardinalby/export-env-action@2.2.2
       with:
         envFile: '.github/constants.env'
 
@@ -81,6 +81,8 @@ jobs:
         gcovr: false
         opencppcoverage: false
 
+    - name: Update CMake to latest version
+      uses: ./.github/actions/setup_cmake
       # make sure coverage is only enabled for Debug builds, since it sets -O0 to make sure coverage
       # has meaningful results
     - name: Configure CMake
@@ -108,3 +110,5 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:${{matrix.language}}"
