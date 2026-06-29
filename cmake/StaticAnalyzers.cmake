@@ -36,6 +36,7 @@ macro(myproject_enable_cppcheck WARNINGS_AS_ERRORS CPPCHECK_OPTIONS)
                     --suppress=knownConditionTrueFalse
                     --inconclusive
                     --suppress=${SUPPRESS_DIR}
+                    --suppress=*:${CMAKE_BINARY_DIR}/_deps/*
             )
         else ()
             message(STATUS "Using custom cppcheck options: ${CPPCHECK_OPTIONS}")
