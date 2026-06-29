@@ -31,7 +31,7 @@ function(myproject_setup_dependencies)
                 GITHUB_REPOSITORY
                 "fmtlib/fmt"
                 GIT_TAG
-                "12.2.0"
+                "12.1.0"
                 SYSTEM
                 YES)
     endif ()
