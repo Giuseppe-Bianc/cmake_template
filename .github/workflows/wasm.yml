@@ -25,6 +25,9 @@ jobs:
       - name: Install Ninja
         run: sudo apt-get install -y ninja-build
 
+      - name: Update CMake to latest version
+        uses: ./.github/actions/setup_cmake
+
       - name: Configure CMake
         run: emcmake cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
