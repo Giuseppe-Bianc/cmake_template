@@ -19,7 +19,7 @@ Checks: "*,
 "
 WarningsAsErrors: ''
 SystemHeaders: false
-HeaderFilterRegex: '^(?!.*[\\/]_deps|build|cmake|configured_files[\\/]).*$'
+HeaderFilterRegex: '^(?!.*([\\/]|^)(_deps|build|cmake|configured_files)([\\/]|$)).*\.(h|hpp|hxx)$'
 FormatStyle:     none
 
 CheckOptions:
