@@ -220,11 +220,12 @@ jobs:
 
       # out/cobertura.xml
       - name: Upload coverage to Codecov
-        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.build_type == 'release') }}
+        if: ${{ matrix.build_type == 'Debug' && hashFiles('./build/coverage.xml') != '' }}
         uses: codecov/codecov-action@v7
         with:
+          use_oidc: true
           fail_ci_if_error: true # we weren't posting previously
-          flags: ${{ matrix.os }}-${{ matrix.build_type }}
-          name: ${{ matrix.os }}-${{ matrix.build_type }}-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./build/coverage.xml
+          flags: ${{ runner.os }}-${{ matrix.compiler }}
+          name: ${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          verbose: true
