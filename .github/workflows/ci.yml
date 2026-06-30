@@ -223,7 +223,6 @@ jobs:
         if: ${{ matrix.build_type == 'Debug' && hashFiles('./build/coverage.xml') != '' }}
         uses: codecov/codecov-action@v7
         with:
-          use_oidc: true
           fail_ci_if_error: true # we weren't posting previously
           files: ./build/coverage.xml
           flags: ${{ runner.os }}-${{ matrix.compiler }}
